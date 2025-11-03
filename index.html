@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trontris</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- COLUNA 1-->
+    <div class="coluna1">
+      <img
+        class="logo"
+        src="https://uploads.onecompiler.io/43rztqcbh/43u9h8rh3/LINES__2_-removebg-preview.png"
+        alt="logo"
+      />
+      <div class="painel">
+        <h3>LEVEL</h3>
+        <p id="level" class="painel-valor">0</p>
+      </div>
+      <div class="painel">
+        <h3>LINES</h3>
+        <p id="lines" class="painel-valor">0</p>
+      </div>
+      <div class="painel">
+        <h3>SCORE</h3>
+        <p id="score" class="painel-valor">000000</p>
+      </div>
+      <div class="painel">
+        <h3>TIME</h3>
+        <p id="time" class="painel-valor">00:00</p>
+      </div>
+    </div>
+
+    <!-- COLUNA 2 - ÁREA DO JOGO -->
+    <div class="coluna2" style="position: relative;">
+      <canvas id="game" width="300" height="600"></canvas>
+      <div id="game-over">
+        <h1>GAME OVER</h1>
+        <p>Press <strong>R</strong> to restart</p>
+      </div>
+    </div>
+
+    <!-- COLUNA 3 - NEXT BLOCK E CONTROLES -->
+    <div class="coluna3">
+      <h3>NEXT BLOCK</h3>
+      <canvas id="next" width="150" height="150"></canvas>
+      <img
+        class="controls-img"
+        src="https://uploads.onecompiler.io/43rztqcbh/43u9h8rh3/3-removebg-preview.png"
+        alt="controls"
+      />
+      <img
+        class="controls-img1"
+        src="https://uploads.onecompiler.io/43rztqcbh/43u9h8rh3/4-removebg-preview.png"
+        alt="controls1"
+      />
+    </div>
+
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
+
+

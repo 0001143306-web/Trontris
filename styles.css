@@ -1,0 +1,169 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/*ESTILIZAÇÃO DO FUNDO E FONTES*/
+body {
+  background-image: url('https://uploads.onecompiler.io/43rztqcbh/43u3j9udb/LINES%20(1).png');
+  background-position: bottom;
+  background-size: cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Orbitron', sans-serif;
+  color: #2778af;
+  position: relative;
+}
+
+.container {
+  display: flex;
+  gap: 40px;
+}
+
+/*ESTILIZAÇÃO DAS COLUNAS 1 (ABAS DE INFORMAÇÕES)*/
+.coluna1 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 300px;
+}
+/*ESTILIZAÇÃO DA COLUNA DO JOGO (COLUNA 2)*/
+.coluna2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/*ESTILIZAÇÃO DA COLUNA 3 (NEXT BLOCK E CONTROLES)*/
+.coluna3 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 300px;
+}
+
+.painel {
+  margin: 23px 0;
+  padding: 10px;
+  border: 2px solid #2778af;
+  border-radius: 6px;
+  background: black;
+  width: 100%;
+  box-shadow: 0 0 2px #2778af, 0 0 2px #2778af, 0 0 5px #2778af, 0 0 5px #2778af;
+}
+
+/*AJUSTE NA ALTURA DAS ABAS DA COLUNA 1*/
+.painel h3 {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+/*ESTILIZAÇÃO DOS VALORES APRESENTADOS*/
+.painel-valor {
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  padding: 5px;
+  border-radius: 4px;
+  background: #222;
+  text-shadow: 0 0 5px #2778af, 0 0 10px #2778af;
+}
+
+/*ESTILIZAÇÃO DO CANVAS DAS COLUNAS 2 E 3*/
+canvas {
+  background: #000;
+  border: 2px solid #2778af;
+  box-shadow: 0 0 2px #2778af, 0 0 2px #2778af, 0 0 5px #2778af, 0 0 5px #2778af;
+}
+
+/*ESTILIZAÇÃO DA IMAGEM IMPORTADA DE CONTROLES*/
+.controls-img {
+  width: 400px;
+  margin-top: 20px;
+}
+
+/*ESTILIZAÇÃO DA IMAGEM IMPORTADA DE CONTROLES - ROTATE*/
+.controls-img1 {
+  width: 200px;
+  margin-top: 5px;
+  position: relative;
+  top: -10px;
+}
+
+/*ESTILIZAÇÃO DA IMAGEM IMPORTADA DA LOGO*/
+.logo {
+  width: 300px;
+  margin-bottom: 20px;
+  margin-top: 10px; /* ajuste fino para alinhar certinho */
+}
+
+/*ESTILIZAÇÃO DA TELA DE GAME OVER*/
+#game-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* Centraliza a tela */
+  background: rgba(0, 0, 0, 0.9);
+  color: #2778af;
+  padding: 30px 50px;
+  border: 2px solid #2778af;
+  border-radius: 10px;
+  font-size: 2em;
+  text-align: center;
+  display: none;
+  flex-direction: column; /* Empilha os itens */
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  box-shadow: 0 0 10px #2778af;
+  user-select: none;
+}
+
+/* Animação do "GAME OVER" */
+#game-over h1 {
+  margin-bottom: 10px; /* Espaço entre título e instrução */
+  animation: pulse 2s infinite;
+}
+
+/* Ajuste do texto "Press R to restart" */
+#game-over p {
+  margin: 0;
+  font-size: 1.2em; /* Tamanho um pouco menor que o título */
+  font-weight: normal; /* Menos destacada que o título */
+  color: #ffffff;
+}
+
+/* Animação do efeito de pulsar */
+@keyframes pulse {
+  0%, 100% {
+    text-shadow: 0 0 10px #2778af;
+  }
+  50% {
+    text-shadow: 0 0 30px #00ffff;
+  }
+}
+
+#pauseBtn {
+  margin-top: 15px;
+  padding: 10px 20px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  background: black;
+  border: 2px solid #2778af;
+  border-radius: 6px;
+  color: #2778af;
+  cursor: pointer;
+  transition: 0.2s;
+  text-shadow: 0 0 5px #2778af;
+  box-shadow: 0 0 8px #2778af;
+}
+
+#pauseBtn:hover {
+  background: #2778af;
+  color: black;
+  text-shadow: none;
+}
+
