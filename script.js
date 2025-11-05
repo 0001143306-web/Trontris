@@ -1,7 +1,27 @@
+// ======= VARIÁVEIS GLOBAIS E ELEMENTOS =======
+let lastScreen = "menu";
+
+const settingsPopup = document.getElementById("settings-popup");
+const bgMusic = document.getElementById("bg-music");
+const musicButton = document.getElementById("toggle-music");
+const volumeRange = document.getElementById("volume");
+const nomeInput = document.getElementById("nome");
+
+const playBtn = document.getElementById("play-btn");
+const controlsBtn = document.getElementById("controls-btn");
+const controlsBtn2 = document.getElementById("controls-btn-2");
+const settingsBtn = document.getElementById("settings-btn");
+const settingsBtn2 = document.getElementById("settings-btn-2");
+const settingsClose = document.getElementById("settings-close");
+const exitBtn = document.getElementById("exit-btn");
+const rankingBtn = document.getElementById("ranking-btn");
+const rankingBack = document.getElementById("ranking-back");
+const controlsBack = document.getElementById("controls-back");
+
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const ctx = canvas ? canvas.getContext("2d") : null;
 const nextCanvas = document.getElementById("next");
-const nextCtx = nextCanvas.getContext("2d");
+const nextCtx = nextCanvas ? nextCanvas.getContext("2d") : null;
 
 const scoreEl = document.getElementById("score");
 const linesEl = document.getElementById("lines");
@@ -11,10 +31,9 @@ const gameOverScreen = document.getElementById("game-over");
 
 const COLS = 10;
 const ROWS = 20;
-const BLOCK = 30;
+const BLOCK = 30; // tamanho em pixels de um bloco no canvas principal
 
-let board = Array.from({length: ROWS}, () => Array(COLS).fill("black"));
-
+// ====== TETROMINOS & CORES ======
 const tetrominos = {
   I: [[1,1,1,1]],
   O: [[1,1],[1,1]],
@@ -25,240 +44,414 @@ const tetrominos = {
   L: [[0,0,1],[1,1,1]],
 };
 
-const colors = ["cyan","yellow","purple","green","red","blue","orange"];
+const colors = {
+  I: "cyan",
+  O: "yellow",
+  T: "purple",
+  S: "green",
+  Z: "red",
+  J: "blue",
+  L: "orange"
+};
 
+// ====== ESTADO DO JOGO ======
+let board = Array.from({length: ROWS}, () => Array(COLS).fill("black"));
+let piece = null;
+let nextPiece = null;
+let score = 0, lines = 0, level = 0;
+let startTime = Date.now();
+let gameOver = false;
+let paused = false;
+let dropCounter = 0;
+let dropInterval = 1000;
+
+// ====== FUNÇÕES DE UTILIDADE ======
 function randomPiece(){
-  const keys = Object.keys(tetrominos); // Obter todas as chaves (tipos de peças)
-  const rand = keys[Math.floor(Math.random()*keys.length)]; // Selecionar uma chave aleatória
-  return { shape: tetrominos[rand], color: colors[keys.indexOf(rand)], x:3, y:0 };
+  const keys = Object.keys(tetrominos);
+  const randKey = keys[Math.floor(Math.random()*keys.length)];
+  // clonar shape para não modificar original
+  const shape = tetrominos[randKey].map(r => r.slice());
+  return { shape, color: colors[randKey], x: 3, y: 0 };
 }
 
-let piece = randomPiece(); // A primeira peça aleatória
-let nextPiece = randomPiece(); // A próxima peça aleatória
+function showScreen(screen) {
+  const current = document.querySelector(".screen.active")?.id?.replace("-screen", "") || "menu";
 
-let score = 0; // Pontuação inicial
-let lines = 0; // Linhas removidas inicialmente
-let level = 0; // Nível do jogo
-let startTime = Date.now(); // Hora de início do jogo
-let gameOver = false; // Flag de game over
-let paused = false; // Flag de pausa
-let dropCounter = 0; // Contador para controle de queda de peça
-let dropInterval = 1000; // Intervalo de tempo para a queda da peça (inicialmente 1 segundo)
+  // Guardar tela anterior (para voltar)
+  lastScreen = current;
 
-// --- Funções de desenho ---
-function drawBlock(x, y, color) {
-  ctx.fillStyle = color; // Define a cor do bloco
-  ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK); // Desenha o bloco no canvas
-  ctx.strokeStyle = "black"; // Define a cor da borda
-  ctx.strokeRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK); // Desenha a borda do bloco
+  // Pausar se abrindo configurações ou controles a partir do jogo
+  if ((screen === "controls" || screen === "settings" || screen === "ranking") && current === "game") {
+    paused = true;
+  }
+
+  // Mostrar a tela
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  const target = document.getElementById(screen + "-screen");
+  if (target) target.classList.add("active");
+
+  // Se for ranking, atualizar lista
+  if (screen === "ranking") renderRanking();
+}
+
+function returnFromControls() {
+  // Voltar para a tela anterior corretamente
+  if (lastScreen === "game") paused = false;
+  showScreen(lastScreen);
+}
+
+function openSettings() {
+  if (!settingsPopup) return;
+  settingsPopup.classList.add("active");
+  settingsPopup.setAttribute("aria-hidden", "false");
+
+  // Pausa se o jogo estiver ativo
+  if (document.getElementById("game-screen").classList.contains("active")) {
+    paused = true;
+  }
+}
+
+function closeSettings() {
+  if (!settingsPopup) return;
+  settingsPopup.classList.remove("active");
+  settingsPopup.setAttribute("aria-hidden", "true");
+
+  // Só despausar se estivermos no jogo
+  if (document.getElementById("game-screen").classList.contains("active")) {
+    paused = false;
+  }
+}
+
+// Proteções caso elementos não existam
+let musicOn = false;
+if (musicButton && bgMusic) {
+  musicButton.addEventListener("click", () => {
+    musicOn = !musicOn;
+    if (musicOn) {
+      bgMusic.play().catch(()=>{}); // play pode rejeitar se não houver interação
+      musicButton.textContent = "🔇 Desligar";
+    } else {
+      bgMusic.pause();
+      musicButton.textContent = "🔊 Ligar";
+    }
+  });
+}
+if (volumeRange && bgMusic) {
+  volumeRange.addEventListener("input", (e) => {
+    bgMusic.volume = parseFloat(e.target.value);
+  });
+}
+
+// ====== DESENHO ======
+function drawBlock(ctxRef, x, y, size, color) {
+  ctxRef.fillStyle = color;
+  ctxRef.fillRect(x * size, y * size, size, size);
+  ctxRef.strokeStyle = "#000000";
+  ctxRef.strokeRect(x * size, y * size, size, size);
 }
 
 function drawBoard() {
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      drawBlock(c, r, board[r][c]); // Desenha cada bloco no tabuleiro
+  if (!ctx) return;
+  for (let r = 0; r < ROWS; r++){
+    for (let c = 0; c < COLS; c++){
+      drawBlock(ctx, c, r, BLOCK, board[r][c]);
     }
   }
 }
 
 function drawPiece(p) {
-  for (let r = 0; r < p.shape.length; r++) { // Itera sobre as linhas da peça
-    for (let c = 0; c < p.shape[r].length; c++) { // Itera sobre as colunas da peça
-      if (p.shape[r][c]) { // Se a célula da peça for preenchida
-        drawBlock(p.x + c, p.y + r, p.color); // Desenha o bloco da peça
+  if (!p || !ctx) return;
+  p.shape.forEach((row, r) => {
+    row.forEach((val, c) => {
+      if (val) drawBlock(ctx, p.x + c, p.y + r, BLOCK, p.color);
+    });
+  });
+}
+
+function drawNext(){
+  if (!nextCtx || !nextPiece) return;
+  // desenhar o próximo em um grid adaptado ao canvas "next"
+  nextCtx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
+
+  // tamanho dinâmico do bloco para o canvas "next"
+  const maxCells = 4; // tetrominos cabem em 4x4
+  const size = Math.floor(Math.min(nextCanvas.width, nextCanvas.height) / maxCells);
+
+  const shapeW = nextPiece.shape[0].length;
+  const shapeH = nextPiece.shape.length;
+
+  const offX = Math.floor((maxCells - shapeW) / 2);
+  const offY = Math.floor((maxCells - shapeH) / 2);
+
+  // limpar fundo
+  nextCtx.fillStyle = "#000";
+  nextCtx.fillRect(0,0,nextCanvas.width,nextCanvas.height);
+
+  nextPiece.shape.forEach((row, r) => {
+    row.forEach((val, c) => {
+      if(val){
+        const drawX = (c + offX) * size;
+        const drawY = (r + offY) * size;
+        nextCtx.fillStyle = nextPiece.color;
+        nextCtx.fillRect(drawX, drawY, size, size);
+        nextCtx.strokeStyle = "black";
+        nextCtx.strokeRect(drawX, drawY, size, size);
       }
-    }
-  }
+    });
+  });
 }
 
-function drawNext() {
-  nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height); // Limpa o painel de próxima peça
-  const offsetX = Math.floor((nextCanvas.width / BLOCK - nextPiece.shape[0].length) / 2); // Centraliza a peça no eixo X
-  const offsetY = Math.floor((nextCanvas.height / BLOCK - nextPiece.shape.length) / 2); // Centraliza a peça no eixo Y
-
-  for (let r = 0; r < nextPiece.shape.length; r++) {
-    for (let c = 0; c < nextPiece.shape[r].length; c++) {
-      if (nextPiece.shape[r][c]) { // Se a célula da próxima peça for preenchida
-        nextCtx.fillStyle = nextPiece.color; // Define a cor da próxima peça
-        nextCtx.fillRect((c + offsetX) * BLOCK, (r + offsetY) * BLOCK, BLOCK, BLOCK); // Desenha o bloco da próxima peça
-        nextCtx.strokeStyle = "black"; // Define a borda da peça
-        nextCtx.strokeRect((c + offsetX) * BLOCK, (r + offsetY) * BLOCK, BLOCK, BLOCK); // Desenha a borda do bloco
-      }
-    }
-  }
-}
-
-// --- Movimento ---
-function moveDown() {
-  if (gameOver || paused) return; // Não move se o jogo estiver pausado ou terminado
-
-  piece.y++; // Move a peça para baixo
-  if (collision()) { // Verifica se ocorreu uma colisão
-    piece.y--; // Se houver colisão, reverte o movimento
-    lockPiece(); // "Trava" a peça no tabuleiro
-    piece = nextPiece; // A peça atual se torna a próxima peça
-    nextPiece = randomPiece(); // Gera uma nova próxima peça
-    if (collision()) { // Se a nova peça colidir com o tabuleiro
-      gameOver = true; // Fim de jogo
-      showGameOver(); // Exibe a tela de Game Over
-    }
-  }
-}
-
-function move(dir) {
-  if (gameOver || paused) return; // Não move se o jogo estiver pausado ou terminado
-
-  piece.x += dir; // Move a peça na direção especificada
-  if (collision()) piece.x -= dir; // Reverte o movimento se houver colisão
-}
-
-function rotate() {
-  if (gameOver || paused) return; // Não rotaciona se o jogo estiver pausado ou terminado
-  const N = piece.shape.length; // Número de linhas da peça
-  const M = piece.shape[0].length; // Número de colunas da peça
-  let rotated = []; // Nova matriz para a peça rotacionada
-  for (let c = 0; c < M; c++) {
-    rotated[c] = [];
-    for (let r = N - 1; r >= 0; r--) {
-      rotated[c][N - 1 - r] = piece.shape[r][c]; // Rotaciona a matriz 90 graus
-    }
-  }
-  let backup = piece.shape; // Faz backup da forma original da peça
-  piece.shape = rotated; // Atualiza a forma da peça com a versão rotacionada
-  if (collision()) piece.shape = backup; // Se houver colisão, restaura a peça original
-}
-
-// --- Colisão e fixação ---
-function collision() {
-  for (let r = 0; r < piece.shape.length; r++) {
-    for (let c = 0; c < piece.shape[r].length; c++) {
-      if (piece.shape[r][c]) {
-        let nx = piece.x + c; // Nova posição X
-        let ny = piece.y + r; // Nova posição Y
-        if (nx < 0 || nx >= COLS || ny >= ROWS || board[ny][nx] !== "black") return true; // Verifica limites e colisão com peças existentes
+// ====== LÓGICA DO JOGO ======
+function collision(tempPiece = piece){
+  if (!tempPiece) return false;
+  for (let r=0;r<tempPiece.shape.length;r++){
+    for (let c=0;c<tempPiece.shape[r].length;c++){
+      if(tempPiece.shape[r][c]){
+        let nx = tempPiece.x + c, ny = tempPiece.y + r;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+        if (ny >= 0 && board[ny][nx] !== "black") return true;
       }
     }
   }
   return false;
 }
 
-function lockPiece() {
-  for (let r = 0; r < piece.shape.length; r++) {
-    for (let c = 0; c < piece.shape[r].length; c++) {
-      if (piece.shape[r][c]) {
-        board[piece.y + r][piece.x + c] = piece.color; // Preenche a posição com a cor da peça
-      }
+function moveDown(){
+  if (!piece) return;
+  piece.y++;
+  if(collision()){
+    piece.y--;
+    lockPiece();
+    piece = nextPiece;
+    nextPiece = randomPiece();
+    if(collision()){
+      gameOver = true;
+      showGameOver();
     }
   }
+}
+
+function move(dir){
+  if (!piece) return;
+  piece.x += dir;
+  if(collision()) piece.x -= dir;
+}
+
+function rotate(){
+  if (!piece) return;
+  const clone = piece.shape.map(r=>[...r]);
+  const rotated = clone[0].map((_,i)=>clone.map(row=>row[i]).reverse());
+  const temp = { ...piece, shape: rotated };
+  if(!collision(temp)) piece.shape = rotated;
+}
+
+function lockPiece(){
+  if (!piece) return;
+  piece.shape.forEach((row,r)=> {
+    row.forEach((val,c)=> {
+      if(val){
+        const y = piece.y + r;
+        const x = piece.x + c;
+        if (y >= 0 && y < ROWS && x >= 0 && x < COLS) {
+          board[y][x] = piece.color;
+        }
+      }
+    });
+  });
   clearLines();
 }
 
-function clearLines() {
-  let linesCleared = 0; // Contador de linhas removidas
-  for (let r = ROWS - 1; r >= 0; r--) {
-    if (board[r].every(cell => cell !== "black")) { // Verifica se a linha está completa
-      board.splice(r, 1); // Remove a linha
-      board.unshift(Array(COLS).fill("black")); // Adiciona uma nova linha preta no topo
-      linesCleared++; // Incrementa o contador de linhas removidas
-      r++; // Ajusta o índice para verificar a linha nova
+function clearLines(){
+  let linesCleared = 0;
+  for(let r = ROWS - 1; r >= 0; r--){
+    if(board[r].every(c => c !== "black")){
+      board.splice(r, 1);
+      board.unshift(Array(COLS).fill("black"));
+      linesCleared++;
+      r++; // checar novamente mesma linha após shift
     }
   }
-  if (linesCleared > 0) {
-    const points = [0, 40, 100, 300, 1200]; // Pontuação por número de linhas removidas
-    score += points[linesCleared] * (level + 1); // Atualiza a pontuação
-    lines += linesCleared; // Atualiza o número de linhas removidas
-    level = Math.floor(lines / 10); // Aumenta o nível após cada 10 linhas
-    dropInterval = Math.max(100, 1000 - level * 50); // Acelera a queda das peças conforme o nível
+  if(linesCleared > 0){
+    const pts = [0,40,100,300,1200];
+    score += pts[linesCleared] * (level + 1);
+    lines += linesCleared;
+    level = Math.floor(lines / 10);
+    dropInterval = Math.max(100, 1000 - (level * 50));
   }
 }
 
-// --- Reset ---
-// Reseta o estado do jogo para o início
-function reset() {
-  board = Array.from({length: ROWS}, () => Array(COLS).fill("black")); // Limpa o tabuleiro
-  score = 0; lines = 0; level = 0; // Reseta os pontos, linhas e nível
-  piece = randomPiece(); // Gera uma nova peça
-  nextPiece = randomPiece(); // Gera a próxima peça
-  startTime = Date.now(); // Reseta o tempo
-  gameOver = false; // Desmarca o fim de jogo
-  paused = false; // Desmarca a pausa
-  dropCounter = 0; // Reseta o contador de queda
-  dropInterval = 1000; // Reseta o intervalo de queda
-  hideGameOver(); // Esconde a tela de game over
+function reset(){
+  board = Array.from({length: ROWS}, () => Array(COLS).fill("black"));
+  score = 0; lines = 0; level = 0;
+  piece = randomPiece();
+  nextPiece = randomPiece();
+  startTime = Date.now();
+  gameOver = false; paused = false;
+  dropCounter = 0; dropInterval = 1000;
+  hideGameOver();
 }
 
-// --- Atualizar tempo ---
+// ====== TEMPO + DESENHO GERAL ======
 function updateTime(){
-  if(gameOver || paused) return; // Não atualiza o tempo se o jogo estiver pausado ou terminado
-  const elapsed = Math.floor((Date.now() - startTime)/1000); // Calcula o tempo passado em segundos
-  const minutes = String(Math.floor(elapsed/60)).padStart(2,"0"); // Converte para minutos com 2 dígitos
-  const seconds = String(elapsed%60).padStart(2,"0"); // Converte para segundos com 2 dígitos
-  timeEl.textContent = `${minutes}:${seconds}`; // Exibe o tempo no painel
-} 
-
-// --- Desenhar ---
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height); // Limpa o canvas
-  drawBoard(); // Desenha o tabuleiro
-  drawPiece(piece);  // Desenha a peça atual
-  drawNext(); // Desenha a próxima peça
-  
-  if(paused){
-    ctx.save(); // Salva o estado atual do contexto 
-    ctx.fillStyle = "rgba(0,0,0,0.5)"; // Define o fundo escuro semitransparente
-    ctx.fillRect(0,0,canvas.width,canvas.height);  // Desenha o fundo escuro
-    ctx.font = "700 32px Orbitron"; // Define a fonte para a mensagem de pausa
-    ctx.fillStyle = "#2778af";// Define a cor da mensagem
-    ctx.textAlign = "center"; // Alinha o texto no centro
-    ctx.fillText("PAUSED", canvas.width/2, canvas.height/2); // Desenha o texto "PAUSED" no centro
-    ctx.restore(); // Restaura o estado do contexto
-  }
- // Atualiza os painéis de pontuação, linhas e nível
-  scoreEl.textContent = score.toString().padStart(6,"0");
-  linesEl.textContent = lines;
-  levelEl.textContent = level;
+  if(gameOver) return;
+  const t = Math.floor((Date.now() - startTime) / 1000);
+  timeEl.textContent = `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;
 }
 
-// --- Game Over ---
-function showGameOver(){ gameOverScreen.style.display = "flex"; }
-function hideGameOver(){ gameOverScreen.style.display = "none"; }
+function draw(){
+  if (!ctx) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawBoard();
+  drawPiece(piece);
+  drawNext();
 
-// --- Controles ---
+  if(paused){
+    ctx.fillStyle="rgba(0,0,0,0.6)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#2778af";
+    ctx.font="700 32px Orbitron, sans-serif";
+    ctx.textAlign="center";
+    ctx.fillText("PAUSED",canvas.width/2,canvas.height/2);
+  }
+
+  if (scoreEl) scoreEl.textContent = score.toString().padStart(6,"0");
+  if (linesEl) linesEl.textContent = lines;
+  if (levelEl) levelEl.textContent = level;
+}
+
+// ====== GAME OVER UI ======
+function showGameOver(){
+  if (gameOverScreen) {
+    gameOverScreen.style.display = "flex";
+    gameOverScreen.setAttribute("aria-hidden", "false");
+  }
+  saveScoreToRanking(score);
+}
+
+function hideGameOver(){
+  if (gameOverScreen) {
+    gameOverScreen.style.display = "none";
+    gameOverScreen.setAttribute("aria-hidden", "true");
+  }
+}
+
+// ====== CONTROLES DO TECLADO ======
 document.addEventListener("keydown", e => {
-  if(gameOver && e.key.toLowerCase() === "r"){ // Reinicia o jogo se pressionado 'r' após game over
-    reset();
-    return;
-  }
+  // Quando game over, R reinicia
+  if (gameOver && e.key.toLowerCase() === "r") { reset(); return; }
+  // Toggle pause
+  if (e.key.toLowerCase() === "p") { paused = !paused; return; }
+  // Não processar controles se pausado ou game over
+  if (paused || gameOver) return;
 
-  if(e.key.toLowerCase() === "p"){
-    paused = !paused; // alterna pausa/despausa
-  }
-
-  if(paused || gameOver) return; // bloqueia controles
-  
-  if(e.key === "ArrowLeft") move(-1);  // Move a peça para a esquerda
-  if(e.key === "ArrowRight") move(1); // Move a peça para a direita
-  if(e.key === "ArrowDown") moveDown(); // Move a peça para baixo
-  if(e.code === "KeyZ" || e.code === "Space") rotate(); // Rotaciona a peça 
+  if (e.key === "ArrowLeft") move(-1);
+  if (e.key === "ArrowRight") move(1);
+  if (e.key === "ArrowDown") moveDown();
+  if (e.code === "Space" || e.code === "KeyZ") rotate();
 });
 
-// --- Loop principal ---
-let lastTime = 0;
-function update(time = 0){
-  const deltaTime = time - lastTime;
-  lastTime = time;
-
-  if(!paused && !gameOver){
-    dropCounter += deltaTime; // Aumenta o contador de queda de peça
-    if(dropCounter > dropInterval){  // Se o intervalo de queda for atingido
-      moveDown(); // Move a peça para baixo
-      dropCounter = 0; // Reseta o contador
-    }
-    updateTime();  // Atualiza o tempo do jogo
+// ====== RANKING ======
+function saveScoreToRanking(finalScore) {
+  // usar o nome do campo se preenchido, senão prompt
+  let name = (nomeInput && nomeInput.value && nomeInput.value.trim()) ? nomeInput.value.trim() : null;
+  if (!name) {
+    name = prompt("Digite seu nome para o ranking:") || "Jogador";
   }
 
-  draw();
-  requestAnimationFrame(update); // Chama a próxima atualização do quadro
+  let ranking = JSON.parse(localStorage.getItem("trontrisRanking")) || [];
+  ranking.push({ name, score: finalScore });
+  ranking.sort((a,b) => b.score - a.score);
+  ranking = ranking.slice(0, 10);
+  localStorage.setItem("trontrisRanking", JSON.stringify(ranking));
 }
 
-update();
+function renderRanking() {
+  const list = document.getElementById("ranking-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  let ranking = JSON.parse(localStorage.getItem("trontrisRanking")) || [];
+
+  ranking.forEach((player, index) => {
+    const li = document.createElement("li");
+    li.textContent = `${index + 1}. ${player.name} — ${player.score}`;
+    list.appendChild(li);
+  });
+}
+
+// ====== LOOP PRINCIPAL ======
+let lastTime = 0;
+function update(time = 0){
+  const delta = time - lastTime;
+  lastTime = time;
+  if (!paused && !gameOver){
+    dropCounter += delta;
+    if (dropCounter > dropInterval){
+      moveDown();
+      dropCounter = 0;
+    }
+    updateTime();
+  }
+  draw();
+  requestAnimationFrame(update);
+}
+
+// ====== EVENTOS DE BOTÕES ======
+if (playBtn) {
+  playBtn.addEventListener("click", () => {
+    const nome = (nomeInput && nomeInput.value) ? nomeInput.value.trim() : "";
+
+    // SE O NOME ESTIVER VAZIO: NÃO JOGA
+    if (nome === "") {
+      alert("⚠️ Por favor, insira seu nome antes de jogar!");
+      if (nomeInput) nomeInput.focus();
+      return;
+    }
+
+    // Salva o nome para usar no ranking / exibição
+    localStorage.setItem("trontrisPlayerName", nome);
+
+    reset();
+    showScreen("game");
+  });
+}
+
+if (controlsBtn) controlsBtn.addEventListener("click", () => showScreen("controls"));
+if (controlsBtn2) controlsBtn2.addEventListener("click", () => showScreen("controls"));
+if (controlsBack) controlsBack.addEventListener("click", () => returnFromControls());
+
+if (settingsBtn) settingsBtn.addEventListener("click", openSettings);
+if (settingsBtn2) settingsBtn2.addEventListener("click", openSettings);
+if (settingsClose) settingsClose.addEventListener("click", closeSettings);
+
+if (exitBtn) exitBtn.addEventListener("click", () => showScreen("menu"));
+
+if (rankingBtn) rankingBtn.addEventListener("click", () => showScreen("ranking"));
+if (rankingBack) rankingBack.addEventListener("click", () => showScreen("menu"));
+
+// fechar popup ao clicar fora da caixa
+if (settingsPopup) {
+  settingsPopup.addEventListener("click", (e) => {
+    if (e.target === settingsPopup) closeSettings();
+  });
+}
+
+// iniciar
+(function init(){
+  // carregar nome salvo (se houver)
+  const savedName = localStorage.getItem("trontrisPlayerName");
+  if(savedName && nomeInput) nomeInput.value = savedName;
+
+  // inicial pieces
+  piece = randomPiece();
+  nextPiece = randomPiece();
+
+  // garantir volume inicial
+  if (volumeRange && bgMusic) bgMusic.volume = parseFloat(volumeRange.value || 0.5);
+
+  // mostrar ranking carregado caso já exista
+  renderRanking();
+
+  // começar loop
+  requestAnimationFrame(update);
+})();
