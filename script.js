@@ -65,6 +65,109 @@ let paused = false;
 let dropCounter = 0;
 let dropInterval = 1000;
 
+// ====== MÚSICA ======
+let musicOn = false; // estado lógico
+// Carregar preferência anterior (opcional)
+try {
+  const savedMusicOn = localStorage.getItem("trontrisMusicOn");
+  if (savedMusicOn !== null) musicOn = savedMusicOn === "true";
+} catch(e){}
+
+function updateMusicButtonLabel(){
+  if (!musicButton) return;
+  musicButton.textContent = musicOn ? "🔇 Desligar" : "🔊 Ligar";
+}
+
+async function tryPlayMusic(){
+  if (!bgMusic) return;
+  try {
+    // garante que o volume esteja aplicado antes de tocar
+    if (volumeRange) bgMusic.volume = parseFloat(volumeRange.value || 0.5);
+    await bgMusic.play();
+    musicOn = true;
+    updateMusicButtonLabel();
+    localStorage.setItem("trontrisMusicOn", "true");
+  } catch (err) {
+    // Se o navegador bloqueou, informar no console e sugerir ação ao usuário
+    console.warn("bgMusic.play() foi bloqueado pelo navegador:", err);
+    updateMusicButtonLabel();
+    // Não usar alert intrusivo sempre; apenas quando for toggle direto
+    // mas fornecemos uma dica visual via console e label
+  }
+}
+
+function stopMusic(){
+  if (!bgMusic) return;
+  try {
+    bgMusic.pause();
+    bgMusic.currentTime = 0;
+  } catch (err) {
+    console.warn("Erro ao pausar música:", err);
+  }
+  musicOn = false;
+  updateMusicButtonLabel();
+  localStorage.setItem("trontrisMusicOn", "false");
+}
+
+// configurar listener do botão (se existir)
+if (musicButton && bgMusic) {
+  musicButton.addEventListener("click", async (e) => {
+    // tentar tocar (isso conta como interação do usuário)
+    if (!musicOn) {
+      try {
+        await tryPlayMusic();
+      } catch (err) {
+        console.warn(err);
+      }
+      // Se não conseguiu, avise o usuário (apenas se continuar pausado)
+      if (bgMusic.paused) {
+        // instrução amigável no console e pelo texto do botão
+        console.info("Recomendação: clique em algum lugar da página para permitir reprodução de áudio se o navegador bloquear.");
+        // opcional: foco no botão instruindo usuário
+      }
+    } else {
+      stopMusic();
+    }
+  });
+}
+
+// desbloquear áudio na primeira interação do usuário (pointerdown é abrangente)
+function unlockAudioOnFirstGesture(){
+  // se a música estiver marcada para ligar e o áudio estiver pausado, tente tocar ao primeiro gesto
+  const onFirst = async () => {
+    if (musicOn && bgMusic && bgMusic.paused) {
+      try {
+        await bgMusic.play();
+        updateMusicButtonLabel();
+      } catch (err) {
+        console.warn("Tentativa de desbloquear áudio falhou:", err);
+      }
+    }
+    // remover o listener após primeira interação
+    document.removeEventListener("pointerdown", onFirst);
+  };
+  document.addEventListener("pointerdown", onFirst, { once: true });
+}
+
+// volume slider
+if (volumeRange && bgMusic) {
+  volumeRange.addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    bgMusic.volume = v;
+    try { localStorage.setItem("trontrisMusicVolume", String(v)); } catch(e){}
+  });
+  // carregar volume salvo
+  try {
+    const sv = localStorage.getItem("trontrisMusicVolume");
+    if (sv !== null && volumeRange) {
+      volumeRange.value = sv;
+      if (bgMusic) bgMusic.volume = parseFloat(sv);
+    } else if (bgMusic && volumeRange) {
+      bgMusic.volume = parseFloat(volumeRange.value || 0.5);
+    }
+  } catch(e){ }
+}
+
 // ====== FUNÇÕES DE UTILIDADE ======
 function randomPiece(){
   const keys = Object.keys(tetrominos);
@@ -120,26 +223,6 @@ function closeSettings() {
   if (document.getElementById("game-screen").classList.contains("active")) {
     paused = false;
   }
-}
-
-// Proteções caso elementos não existam
-let musicOn = false;
-if (musicButton && bgMusic) {
-  musicButton.addEventListener("click", () => {
-    musicOn = !musicOn;
-    if (musicOn) {
-      bgMusic.play().catch(()=>{}); // play pode rejeitar se não houver interação
-      musicButton.textContent = "🔇 Desligar";
-    } else {
-      bgMusic.pause();
-      musicButton.textContent = "🔊 Ligar";
-    }
-  });
-}
-if (volumeRange && bgMusic) {
-  volumeRange.addEventListener("input", (e) => {
-    bgMusic.volume = parseFloat(e.target.value);
-  });
 }
 
 // ====== DESENHO ======
@@ -398,7 +481,7 @@ function update(time = 0){
 
 // ====== EVENTOS DE BOTÕES ======
 if (playBtn) {
-  playBtn.addEventListener("click", () => {
+  playBtn.addEventListener("click", async () => {
     const nome = (nomeInput && nomeInput.value) ? nomeInput.value.trim() : "";
 
     // SE O NOME ESTIVER VAZIO: NÃO JOGA
@@ -413,6 +496,15 @@ if (playBtn) {
 
     reset();
     showScreen("game");
+
+    // Ao começar o jogo, se a preferência for ligar música, tente tocar
+    if (musicOn) {
+      try {
+        await tryPlayMusic();
+      } catch (err) {
+        console.warn("Não foi possível iniciar música ao começar o jogo:", err);
+      }
+    }
   });
 }
 
@@ -447,7 +539,17 @@ if (settingsPopup) {
   nextPiece = randomPiece();
 
   // garantir volume inicial
-  if (volumeRange && bgMusic) bgMusic.volume = parseFloat(volumeRange.value || 0.5);
+  try {
+    const savedVol = localStorage.getItem("trontrisMusicVolume");
+    if (savedVol !== null && bgMusic) bgMusic.volume = parseFloat(savedVol);
+    else if (volumeRange && bgMusic) bgMusic.volume = parseFloat(volumeRange.value || 0.5);
+  } catch(e){ if (volumeRange && bgMusic) bgMusic.volume = parseFloat(volumeRange.value || 0.5); }
+
+  // atualizar label do botão de música conforme preferência
+  updateMusicButtonLabel();
+
+  // tentar desbloquear áudio na primeira interação (se o usuário tiver preferido música ligada)
+  unlockAudioOnFirstGesture();
 
   // mostrar ranking carregado caso já exista
   renderRanking();
